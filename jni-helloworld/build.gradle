@@ -1,0 +1,118 @@
+group 'easy-java'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+apply plugin: 'cpp'
+apply plugin: 'application'
+
+sourceCompatibility = 1.8
+mainClassName = 'io.yushan.Main'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+//生成Jni类的Cpp头文件
+task generateJniHeaders(type:Exec) {
+    //由于 sourceSets.main.output.classesDir 是 deprecated，采用替代的方法
+    def classpath = sourceSets.main.output.classesDirs[0]
+    def nativeIncludes = "src/native/include"
+    //classNames.txt是在工程目录下的classNames.txt 记录需要javah的类
+    commandLine "javah", "-d", nativeIncludes, "-classpath", classpath, "-jni io.yushan.HelloWorld"
+
+    dependsOn classes
+}
+
+def jniLibName = "jni-demo"
+
+def javahome = org.gradle.internal.jvm.Jvm.current().javaHome
+
+model {
+    components {
+        "${jniLibName}"(NativeLibrarySpec) {
+
+            sources {
+                cpp {
+                    source{
+                        srcDir 'src/native/cpp'
+
+                    }
+
+                }
+            }
+
+        }
+    }
+
+    toolChains {
+        gcc(Gcc) {
+            eachPlatform {
+                if (System.properties['os.name'].equals("Mac OS X")) {
+                    cppCompiler.withArguments { args ->
+                        args << "-I" + "${javahome}/include"
+                        args << "-I" + "${javahome}/include/darwin"
+                        args << "-O2"
+                        args << "-std=c++11"
+                    }
+                    linker.withArguments { args ->
+                        args << "-O2"
+                        args << "-lstdc++"
+                    }
+                } else {
+                    cppCompiler.withArguments { args ->
+                        args << "-I" + "${javahome}/include"
+                        args << "-I" + "${javahome}/include/linux"
+                        args << "-O2"
+                        args << "-std=c++11"
+                    }
+                    linker.withArguments { args ->
+                        args << "-O2"
+                        args << "-lstdc++"
+                    }
+                }
+            }
+        }
+        clang(Clang) {
+            eachPlatform {
+                if (System.properties['os.name'].equals("Mac OS X")) {
+                    cppCompiler.withArguments { args ->
+                        args << "-I"  + "${javahome}/include"
+                        args << "-I"  + "${javahome}/include/darwin"
+                        args << "-O2"
+                        args << "-std=c++11"
+                    }
+                    linker.withArguments { args ->
+                        args << "-O2"
+                        args << "-lstdc++"
+                    }
+                } else {
+                    cppCompiler.withArguments { args ->
+                        args << "-I" + "${javahome}/include"
+                        args << "-I" + "${javahome}/include/linux"
+                        args << "-O2"
+                        args << "-std=c++11"
+                    }
+                    linker.withArguments { args ->
+                        args << "-O2"
+                        args << "-lstdc++"
+                    }
+                }
+            }
+        }
+    }
+
+    platforms {
+        x64 {
+            architecture "x64"
+        }
+    }
+}
+
+run {
+    //add shared library to java.library.path when run gradle run
+    systemProperty 'java.library.path', file("${buildDir}/libs/${jniLibName}/shared")
+}
